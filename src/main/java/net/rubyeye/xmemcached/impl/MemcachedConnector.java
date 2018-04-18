@@ -56,7 +56,7 @@ import com.google.code.yanf4j.util.SystemUtils;
 
 /**
  * Connected session manager
- * 
+ *
  * @author dennis
  */
 public class MemcachedConnector extends SocketChannelController implements Connector {
@@ -93,9 +93,9 @@ public class MemcachedConnector extends SocketChannelController implements Conne
 
   /**
    * Session monitor for healing sessions.
-   * 
+   *
    * @author dennis
-   * 
+   *
    */
   class SessionMonitor extends Thread {
     public SessionMonitor() {
@@ -514,7 +514,7 @@ public class MemcachedConnector extends SocketChannelController implements Conne
 
   /**
    * Returns main node's standby session list.
-   * 
+   *
    * @param addr
    * @return
    */
@@ -526,9 +526,9 @@ public class MemcachedConnector extends SocketChannelController implements Conne
 
   /**
    * Inner state listenner,manage session monitor.
-   * 
+   *
    * @author boyan
-   * 
+   *
    */
   class InnerControllerStateListener implements ControllerStateListener {
 
@@ -563,7 +563,7 @@ public class MemcachedConnector extends SocketChannelController implements Conne
 
   /**
    * Get session by InetSocketAddress
-   * 
+   *
    * @param addr
    * @return
    */
@@ -616,7 +616,7 @@ public class MemcachedConnector extends SocketChannelController implements Conne
 
   /**
    * Build write queue for session
-   * 
+   *
    * @return
    */
   @Override
