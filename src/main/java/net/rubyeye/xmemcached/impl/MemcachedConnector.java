@@ -63,6 +63,7 @@ public class MemcachedConnector extends SocketChannelController implements Conne
   private final DelayQueue<ReconnectRequest> waitingQueue = new DelayQueue<ReconnectRequest>();
   private BufferAllocator bufferAllocator;
 
+  // Set of addresses that are due for removal
   private final Set<InetSocketAddress> removedAddrSet = new ConcurrentHashSet<InetSocketAddress>();
 
   private final MemcachedOptimizer optimiezer;
@@ -73,15 +74,23 @@ public class MemcachedConnector extends SocketChannelController implements Conne
   private final CommandFactory commandFactory;
   private boolean failureMode;
 
-  private final ConcurrentHashMap<InetSocketAddress/* Main node address */, List<Session>/*
-                                                                                          * standby
-                                                                                          * sessions
-                                                                                          */> standbySessionMap =
+  // Maps main addresses to their primary session
+  protected final ConcurrentHashMap<InetSocketAddress, Queue<Session>> sessionMap =
+      new ConcurrentHashMap<InetSocketAddress, Queue<Session>>();
+
+  // Maps main addresses to their standby sessions
+  private final ConcurrentHashMap<InetSocketAddress, List<Session>> standbySessionMap =
       new ConcurrentHashMap<InetSocketAddress, List<Session>>();
 
   private final FlowControl flowControl;
 
   private volatile boolean shuttingDown = false;
+  protected MemcachedSessionLocator sessionLocator;
+  private final Random random = new Random();
+  private static final MemcachedSessionComparator sessionComparator =
+      new MemcachedSessionComparator();
+  private final SessionMonitor sessionMonitor = new SessionMonitor();
+
 
   public void shuttingDown() {
     this.shuttingDown = true;
@@ -204,11 +213,6 @@ public class MemcachedConnector extends SocketChannelController implements Conne
     return this.protocol;
   }
 
-  protected MemcachedSessionLocator sessionLocator;
-
-  protected final ConcurrentHashMap<InetSocketAddress, Queue<Session>> sessionMap =
-      new ConcurrentHashMap<InetSocketAddress, Queue<Session>>();
-
   public synchronized void addSession(Session session) {
     MemcachedSession tcpSession = (MemcachedSession) session;
 
@@ -329,9 +333,6 @@ public class MemcachedConnector extends SocketChannelController implements Conne
       }
     }
   }
-
-  private static final MemcachedSessionComparator sessionComparator =
-      new MemcachedSessionComparator();
 
   public final void updateSessions() {
     Collection<Queue<Session>> sessionCollection = this.sessionMap.values();
@@ -478,8 +479,6 @@ public class MemcachedConnector extends SocketChannelController implements Conne
     // do nothing
   }
 
-  private final Random random = new Random();
-
   public Session send(final Command msg) throws MemcachedException {
     MemcachedSession session = (MemcachedSession) this.findSessionByKey(msg.getKey());
     if (session == null) {
@@ -521,8 +520,6 @@ public class MemcachedConnector extends SocketChannelController implements Conne
   public List<Session> getStandbySessionListByMainNodeAddr(InetSocketAddress addr) {
     return this.standbySessionMap.get(addr);
   }
-
-  private final SessionMonitor sessionMonitor = new SessionMonitor();
 
   /**
    * Inner state listenner,manage session monitor.
