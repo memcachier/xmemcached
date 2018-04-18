@@ -98,7 +98,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
     AWSElasticCacheClient memcachedClient = new AWSElasticCacheClient(this.sessionLocator,
         this.bufferAllocator, this.configuration, this.socketOptions, this.commandFactory,
-        this.transcoder, this.stateListeners, this.authInfoMap, this.connectionPoolSize,
+        this.transcoder, this.stateListeners, this.getAuthInfoMap(), this.connectionPoolSize,
         this.connectTimeout, this.name, this.failureMode, configAddrs, this.pollConfigIntervalMs);
     this.configureClient(memcachedClient);
 

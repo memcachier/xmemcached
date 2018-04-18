@@ -61,6 +61,7 @@ import net.rubyeye.xmemcached.transcoders.Transcoder;
 import net.rubyeye.xmemcached.utils.AddrUtil;
 import net.rubyeye.xmemcached.utils.ByteUtils;
 import net.rubyeye.xmemcached.utils.InetSocketAddressWrapper;
+import net.rubyeye.xmemcached.utils.MemcachedServer;
 import net.rubyeye.xmemcached.utils.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -258,16 +259,33 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
     return -1L;
   }
 
+  @Deprecated
   public Map<InetSocketAddress, AuthInfo> getAuthInfoMap() {
     return this.authInfoMap;
   }
 
+  @Deprecated
   public void setAuthInfoMap(Map<InetSocketAddress, AuthInfo> map) {
     this.authInfoMap = map;
     this.authInfoStringMap = new HashMap<String, AuthInfo>();
     for (Map.Entry<InetSocketAddress, AuthInfo> entry : map.entrySet()) {
       String server = AddrUtil.getServerString(entry.getKey());
       this.authInfoStringMap.put(server, entry.getValue());
+    }
+  }
+
+  private void setAuthInfoMap(List<MemcachedServer> serverList) {
+    for (MemcachedServer server : serverList) {
+      // Add main addresses
+      this.authInfoMap.put(server.getMainAddress(), server.getAuthInfo());
+      String mainServerString = AddrUtil.getServerString(server.getMainAddress());
+      this.authInfoStringMap.put(mainServerString, server.getAuthInfo());
+      // Add standby addresses
+      if (server.getStandbyAddress() != null) {
+        this.authInfoMap.put(server.getStandbyAddress(), server.getAuthInfo());
+        String standbyServerString = AddrUtil.getServerString(server.getStandbyAddress());
+        this.authInfoStringMap.put(standbyServerString, server.getAuthInfo());
+      }
     }
   }
 
@@ -324,7 +342,9 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    * @param server �����P
    * @param port ����ㄧ���
    * @throws IOException
+   * @deprecated Use XMemcachedClientBuilder to create a xMemcachedClient.
    */
+  @Deprecated
   public XMemcachedClient(final String server, final int port) throws IOException {
     this(server, port, 1);
   }
@@ -336,7 +356,9 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    * @param port server port
    * @param weight server weight
    * @throws IOException
+   * @deprecated Use XMemcachedClientBuilder to create a xMemcachedClient.
    */
+  @Deprecated
   public XMemcachedClient(final String host, final int port, int weight) throws IOException {
     super();
     if (weight <= 0) {
@@ -733,7 +755,9 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    * @param inetSocketAddress
    * @param weight
    * @throws IOException
+   * @deprecated Use XMemcachedClientBuilder to create a xMemcachedClient.
    */
+  @Deprecated
   public XMemcachedClient(final InetSocketAddress inetSocketAddress, int weight,
       CommandFactory cmdFactory) throws IOException {
     super();
@@ -755,15 +779,18 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
         this.serverOrderCount.incrementAndGet(), weight, null));
   }
 
+  @Deprecated
   public XMemcachedClient(final InetSocketAddress inetSocketAddress, int weight)
       throws IOException {
     this(inetSocketAddress, weight, new TextCommandFactory());
   }
 
+  @Deprecated
   public XMemcachedClient(final InetSocketAddress inetSocketAddress) throws IOException {
     this(inetSocketAddress, 1);
   }
 
+  @Deprecated
   public XMemcachedClient() throws IOException {
     super();
     this.buildConnector(new ArrayMemcachedSessionLocator(), new SimpleBufferAllocator(),
@@ -786,38 +813,28 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    * @param stateListeners
    * @throws IOException
    */
+  @Deprecated
   @SuppressWarnings("unchecked")
   public XMemcachedClient(MemcachedSessionLocator locator, BufferAllocator allocator,
       Configuration conf, Map<SocketOption, Object> socketOptions, CommandFactory commandFactory,
       Transcoder transcoder, Map<InetSocketAddress, InetSocketAddress> addressMap,
-      List<MemcachedClientStateListener> stateListeners, Map<InetSocketAddress, AuthInfo> map,
-      int poolSize, long connectTimeout, String name, boolean failureMode) throws IOException {
+      List<MemcachedClientStateListener> stateListeners,
+      Map<InetSocketAddress, AuthInfo> authInfoMap, int poolSize, long connectTimeout, String name,
+      boolean failureMode) throws IOException {
     super();
-    this.setConnectTimeout(connectTimeout);
-    this.setFailureMode(failureMode);
-    this.setName(name);
-    this.optimiezeSetReadThreadCount(conf, addressMap == null ? 0 : addressMap.size());
-    this.buildConnector(locator, allocator, conf, socketOptions, commandFactory, transcoder);
-    if (stateListeners != null) {
-      for (MemcachedClientStateListener stateListener : stateListeners) {
-        this.addStateListener(stateListener);
-      }
-    }
-    this.setAuthInfoMap(map);
-    this.setConnectionPoolSize(poolSize);
-    this.start0();
+    List<MemcachedServer> serverList = null;
     if (addressMap != null) {
+      serverList = new LinkedList<MemcachedServer>();
       for (Map.Entry<InetSocketAddress, InetSocketAddress> entry : addressMap.entrySet()) {
-        final InetSocketAddress mainNodeAddr = entry.getKey();
-        final InetSocketAddress standbyNodeAddr = entry.getValue();
-        this.connect(new InetSocketAddressWrapper(mainNodeAddr,
-            this.serverOrderCount.incrementAndGet(), 1, null));
-        if (standbyNodeAddr != null) {
-          this.connect(new InetSocketAddressWrapper(standbyNodeAddr,
-              this.serverOrderCount.incrementAndGet(), 1, mainNodeAddr));
+        MemcachedServer server = new MemcachedServer(entry.getKey(), entry.getValue());
+        if (authInfoMap != null) {
+          server.setAuthInfo(authInfoMap.get(server.getMainAddress()));
         }
+        serverList.add(server);
       }
     }
+    this.setup(locator, allocator, conf, socketOptions, commandFactory, transcoder, serverList,
+        stateListeners, poolSize, connectTimeout, name, failureMode);
   }
 
   /**
@@ -833,6 +850,7 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    * @param stateListeners weight array for address list
    * @throws IOException
    */
+  @Deprecated
   @SuppressWarnings("unchecked")
   XMemcachedClient(MemcachedSessionLocator locator, BufferAllocator allocator, Configuration conf,
       Map<SocketOption, Object> socketOptions, CommandFactory commandFactory, Transcoder transcoder,
@@ -841,48 +859,87 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
       int poolSize, long connectTimeout, final String name, boolean failureMode)
       throws IOException {
     super();
+    List<MemcachedServer> serverList = null;
+    if (addressMap != null) {
+      if (weights == null) {
+        throw new IllegalArgumentException("Weights cannot be null.");
+      }
+      if (addressMap.size() > weights.length) {
+        throw new IllegalArgumentException(
+            "Weights Array's length needs to match or exeed number of servers");
+      }
+
+      serverList = new LinkedList<MemcachedServer>();
+      int i = 0;
+      for (Map.Entry<InetSocketAddress, InetSocketAddress> entry : addressMap.entrySet()) {
+        MemcachedServer server = new MemcachedServer(entry.getKey(), entry.getValue(), weights[i]);
+        if (authInfoMap != null) {
+          server.setAuthInfo(authInfoMap.get(server.getMainAddress()));
+        }
+        serverList.add(server);
+        ++i;
+      }
+    }
+    this.setup(locator, allocator, conf, socketOptions, commandFactory, transcoder, serverList,
+        stateListeners, poolSize, connectTimeout, name, failureMode);
+  }
+
+  /**
+   * XMemcachedClient constructor.
+   *
+   * @param locator
+   * @param allocator
+   * @param conf
+   * @param socketOptions
+   * @param commandFactory
+   * @param transcoder
+   * @param serverList
+   * @param stateListeners
+   * @param poolSize
+   * @param connectTimeout
+   * @param name
+   * @param failureMode
+   * @throws IOException
+   */
+  @SuppressWarnings("unchecked")
+  XMemcachedClient(MemcachedSessionLocator locator, BufferAllocator allocator, Configuration conf,
+      Map<SocketOption, Object> socketOptions, CommandFactory commandFactory, Transcoder transcoder,
+      List<MemcachedServer> serverList, List<MemcachedClientStateListener> stateListeners,
+      int poolSize, long connectTimeout, final String name, boolean failureMode)
+      throws IOException {
+    super();
+    this.setup(locator, allocator, conf, socketOptions, commandFactory, transcoder, serverList,
+        stateListeners, poolSize, connectTimeout, name, failureMode);
+  }
+
+  private final void setup(MemcachedSessionLocator locator, BufferAllocator allocator,
+      Configuration conf, Map<SocketOption, Object> socketOptions, CommandFactory commandFactory,
+      Transcoder transcoder, List<MemcachedServer> serverList,
+      List<MemcachedClientStateListener> stateListeners, int poolSize, long connectTimeout,
+      final String name, boolean failureMode) throws IOException {
     this.setConnectTimeout(connectTimeout);
     this.setFailureMode(failureMode);
     this.setName(name);
-    if (weights == null && addressMap != null) {
-      throw new IllegalArgumentException("Null weights");
-    }
-    if (weights != null && addressMap == null) {
-      throw new IllegalArgumentException("Null addressList");
-    }
-
-    if (weights != null) {
-      for (int weight : weights) {
-        if (weight <= 0) {
-          throw new IllegalArgumentException("Some weights<=0");
-        }
-      }
-    }
-    if (weights != null && addressMap != null && weights.length < addressMap.size()) {
-      throw new IllegalArgumentException("weights.length is less than addressList.size()");
-    }
-    this.optimiezeSetReadThreadCount(conf, addressMap == null ? 0 : addressMap.size());
+    this.optimiezeSetReadThreadCount(conf, serverList == null ? 0 : serverList.size());
     this.buildConnector(locator, allocator, conf, socketOptions, commandFactory, transcoder);
     if (stateListeners != null) {
       for (MemcachedClientStateListener stateListener : stateListeners) {
         this.addStateListener(stateListener);
       }
     }
-    this.setAuthInfoMap(infoMap);
     this.setConnectionPoolSize(poolSize);
     this.start0();
-    if (addressMap != null && weights != null) {
-      int i = 0;
-      for (Map.Entry<InetSocketAddress, InetSocketAddress> entry : addressMap.entrySet()) {
-        final InetSocketAddress mainNodeAddr = entry.getKey();
-        final InetSocketAddress standbyNodeAddr = entry.getValue();
-        this.connect(new InetSocketAddressWrapper(mainNodeAddr,
-            this.serverOrderCount.incrementAndGet(), weights[i], null));
-        if (standbyNodeAddr != null) {
-          this.connect(new InetSocketAddressWrapper(standbyNodeAddr,
-              this.serverOrderCount.incrementAndGet(), weights[i], mainNodeAddr));
+
+    if (serverList != null) {
+      this.setAuthInfoMap(serverList);
+      for (MemcachedServer server : serverList) {
+        this.connect(new InetSocketAddressWrapper(server.getMainAddress(),
+            this.serverOrderCount.incrementAndGet(), server.getWeight(), null));
+        if (server.getStandbyAddress() != null) {
+          this.connect(new InetSocketAddressWrapper(server.getStandbyAddress(),
+              this.serverOrderCount.incrementAndGet(), server.getWeight(),
+              server.getMainAddress()));
         }
-        i++;
       }
     }
   }
@@ -910,7 +967,9 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    *
    * @param addressList
    * @throws IOException
+   * @deprecated Use XMemcachedClientBuilder to create a xMemcachedClient.
    */
+  @Deprecated
   public XMemcachedClient(List<InetSocketAddress> addressList) throws IOException {
     this(addressList, new TextCommandFactory());
   }
@@ -921,7 +980,9 @@ public class XMemcachedClient implements XMemcachedClientMBean, MemcachedClient 
    * @param cmdFactory command factory
    * @param addressList memcached server socket address list.
    * @throws IOException
+   * @deprecated Use XMemcachedClientBuilder to create a xMemcachedClient.
    */
+  @Deprecated
   public XMemcachedClient(List<InetSocketAddress> addressList, CommandFactory cmdFactory)
       throws IOException {
     super();

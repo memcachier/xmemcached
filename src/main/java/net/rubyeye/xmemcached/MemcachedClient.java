@@ -1540,14 +1540,18 @@ public interface MemcachedClient {
    *
    * @param map Auth info map,key is memcached server address,and value is the auth info for the
    *        key.
+   * @deprecated Auth info should be set via the MemcachedServer list in the constructor.
    */
+  @Deprecated
   public void setAuthInfoMap(Map<InetSocketAddress, AuthInfo> map);
 
   /**
    * return current all auth info
    *
    * @return Auth info map,key is memcached server address,and value is the auth info for the key.
+   * @deprecated use {#link getAuthInfoStringMap} instead.
    */
+  @Deprecated
   public Map<InetSocketAddress, AuthInfo> getAuthInfoMap();
 
   /**

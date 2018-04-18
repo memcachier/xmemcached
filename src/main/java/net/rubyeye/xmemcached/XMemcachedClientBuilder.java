@@ -17,6 +17,7 @@ import net.rubyeye.xmemcached.impl.RandomMemcachedSessionLocaltor;
 import net.rubyeye.xmemcached.transcoders.SerializingTranscoder;
 import net.rubyeye.xmemcached.transcoders.Transcoder;
 import net.rubyeye.xmemcached.utils.AddrUtil;
+import net.rubyeye.xmemcached.utils.MemcachedServer;
 import net.rubyeye.xmemcached.utils.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,10 +38,7 @@ public class XMemcachedClientBuilder implements MemcachedClientBuilder {
   protected MemcachedSessionLocator sessionLocator = new ArrayMemcachedSessionLocator();
   protected BufferAllocator bufferAllocator = new SimpleBufferAllocator();
   protected Configuration configuration = getDefaultConfiguration();
-  protected Map<InetSocketAddress, InetSocketAddress> addressMap =
-      new LinkedHashMap<InetSocketAddress, InetSocketAddress>();
-
-  protected int[] weights;
+  protected List<MemcachedServer> mcServerList = new ArrayList<MemcachedServer>();
 
   protected long connectTimeout = MemcachedClient.DEFAULT_CONNECT_TIMEOUT;
 
@@ -51,9 +49,6 @@ public class XMemcachedClientBuilder implements MemcachedClientBuilder {
 
   protected List<MemcachedClientStateListener> stateListeners =
       new ArrayList<MemcachedClientStateListener>();
-
-  protected Map<InetSocketAddress, AuthInfo> authInfoMap =
-      new HashMap<InetSocketAddress, AuthInfo>();
 
   protected String name;
 
@@ -208,39 +203,141 @@ public class XMemcachedClientBuilder implements MemcachedClientBuilder {
   @SuppressWarnings({"rawtypes"})
   protected Transcoder transcoder = new SerializingTranscoder();
 
+  /**
+   * Create a XMemcachedClientBuilder for a list of memcached servers. The string
+   * needs to be formatted as a space spearated list of hostname:port entries,
+   * e.g., "my.server.co:11211 my.other.server.co:11211"
+   *
+   * @deprecated Use {@link #createFromAddressList(List<InetSocketAddress> addressList)}
+   *             instead. The string can be converted into an address list with
+   *             {@link AddrUtil#getAddresses(String addressList)}.
+   */
+  @Deprecated
   public XMemcachedClientBuilder(String addressList) {
     this(AddrUtil.getAddresses(addressList));
   }
 
+  /**
+   * Create a XMemcachedClientBuilder for a list of memcached servers.
+   *
+   * @deprecated Use {@link #createFromAddressList(List<InetSocketAddress> addressList)}
+   *             instead.
+   */
+  @Deprecated
   public XMemcachedClientBuilder(List<InetSocketAddress> addressList) {
-    if (addressList != null) {
-      for (InetSocketAddress addr : addressList) {
-        this.addressMap.put(addr, null);
-      }
+    if (addressList == null || addressList.size() < 1) {
+      throw new IllegalArgumentException(
+          "There needs to be at least one server in the address list");
+    }
+    for (InetSocketAddress addr : addressList) {
+      this.mcServerList.add(new MemcachedServer(addr));
     }
   }
 
+  /**
+   * Create a XMemcachedClientBuilder for a list of memcached servers and their weights.
+   *
+   * @deprecated Use {@link #createFromServerList(List<MemcachedServer> serverList)}
+   *             instead.
+   */
+  @Deprecated
   public XMemcachedClientBuilder(List<InetSocketAddress> addressList, int[] weights) {
-    if (addressList != null) {
-      for (InetSocketAddress addr : addressList) {
-        this.addressMap.put(addr, null);
-      }
+    if (weights == null) {
+      throw new IllegalArgumentException("Weights cannot be null");
     }
-    this.weights = weights;
+    if (addressList == null || addressList.size() < 1) {
+      throw new IllegalArgumentException(
+          "There needs to be at least one server in the address list");
+    }
+    if (addressList.size() > weights.length) {
+      throw new IllegalArgumentException(
+          "Weights Array's length needs to match or exeed number of servers");
+    }
+
+    int i = 0;
+    for (InetSocketAddress addr : addressList) {
+      this.mcServerList.add(new MemcachedServer(addr, weights[i]));
+      ++i;
+    }
   }
 
+  /**
+   * @deprecated Use {@link #createFromServerList(List<MemcachedServer> serverList)}
+   *             instead.
+   */
+  @Deprecated
   public XMemcachedClientBuilder(Map<InetSocketAddress, InetSocketAddress> addressMap) {
-    this.addressMap = addressMap;
+    if (addressMap == null || addressMap.size() < 1) {
+      throw new IllegalArgumentException(
+          "There needs to be at least one server in the address map");
+    }
+    for (Map.Entry<InetSocketAddress, InetSocketAddress> entry : addressMap.entrySet()) {
+      this.mcServerList.add(new MemcachedServer(entry.getKey(), entry.getValue()));
+    }
   }
 
+  /**
+   * @deprecated Use {@link #createFromServerList(List<MemcachedServer> serverList)}
+   *             instead.
+   */
+  @Deprecated
   public XMemcachedClientBuilder(Map<InetSocketAddress, InetSocketAddress> addressMap,
       int[] weights) {
-    this.addressMap = addressMap;
-    this.weights = weights;
+    if (weights == null) {
+      throw new IllegalArgumentException("Weights cannot be null");
+    }
+    if (addressMap == null || addressMap.size() < 1) {
+      throw new IllegalArgumentException(
+          "There needs to be at least one server in the address map");
+    }
+    if (addressMap.size() > weights.length) {
+      throw new IllegalArgumentException(
+          "Weights Array's length needs to match or exeed number of servers");
+    }
+
+    int i = 0;
+    for (Map.Entry<InetSocketAddress, InetSocketAddress> entry : addressMap.entrySet()) {
+      this.mcServerList.add(new MemcachedServer(entry.getKey(), entry.getValue(), weights[i]));
+      ++i;
+    }
   }
 
+  /**
+   * @deprecated Will be made private in future release. You should only create
+   *             a XMemcachedClientBuilder with actual server.
+   */
+  @Deprecated
   public XMemcachedClientBuilder() {
-    this((Map<InetSocketAddress, InetSocketAddress>) null);
+    this.mcServerList = null;
+  }
+
+  /**
+   * Create a XMemcachedClientBuilder for a list of memcached servers.
+   */
+  public static XMemcachedClientBuilder createFromServerList(List<MemcachedServer> serverList) {
+    if (serverList == null || serverList.size() < 1) {
+      throw new IllegalArgumentException(
+          "There needs to be at least one server in the server list");
+    }
+    XMemcachedClientBuilder builder = new XMemcachedClientBuilder();
+    builder.setMemcachedServerList(serverList);
+    return builder;
+  }
+
+  /**
+   * Create a XMemcachedClientBuilder for a list of server addresses.
+   */
+  public static XMemcachedClientBuilder createFromAddressList(List<InetSocketAddress> addressList) {
+    if (addressList == null || addressList.size() < 1) {
+      throw new IllegalArgumentException(
+          "There needs to be at least one address in the address list");
+    }
+    XMemcachedClientBuilder builder = new XMemcachedClientBuilder(addressList);
+    return builder;
+  }
+
+  private void setMemcachedServerList(List<MemcachedServer> serverList) {
+    this.mcServerList = serverList;
   }
 
   /*
@@ -314,30 +411,17 @@ public class XMemcachedClientBuilder implements MemcachedClientBuilder {
   public MemcachedClient build() throws IOException {
     XMemcachedClient memcachedClient;
     // kestrel protocol use random session locator.
-    if (this.commandFactory.getProtocol() == Protocol.Kestrel) {
-      if (!(this.sessionLocator instanceof RandomMemcachedSessionLocaltor)) {
-        log.warn(
-            "Recommend to use `net.rubyeye.xmemcached.impl.RandomMemcachedSessionLocaltor` as session locator for kestrel protocol.");
-      }
+    if (this.commandFactory.getProtocol() == Protocol.Kestrel
+        && !(this.sessionLocator instanceof RandomMemcachedSessionLocaltor)) {
+      log.warn(
+          "Recommend to use `net.rubyeye.xmemcached.impl.RandomMemcachedSessionLocaltor` as session locator for kestrel protocol.");
     }
-    if (this.weights == null) {
-      memcachedClient = new XMemcachedClient(this.sessionLocator, this.bufferAllocator,
-          this.configuration, this.socketOptions, this.commandFactory, this.transcoder,
-          this.addressMap, this.stateListeners, this.authInfoMap, this.connectionPoolSize,
-          this.connectTimeout, this.name, this.failureMode);
 
-    } else {
-      if (this.addressMap == null) {
-        throw new IllegalArgumentException("Null Address map");
-      }
-      if (this.addressMap.size() > this.weights.length) {
-        throw new IllegalArgumentException("Weights Array's length is less than server's number");
-      }
-      memcachedClient = new XMemcachedClient(this.sessionLocator, this.bufferAllocator,
-          this.configuration, this.socketOptions, this.commandFactory, this.transcoder,
-          this.addressMap, this.weights, this.stateListeners, this.authInfoMap,
-          this.connectionPoolSize, this.connectTimeout, this.name, this.failureMode);
-    }
+    memcachedClient = new XMemcachedClient(this.sessionLocator, this.bufferAllocator,
+        this.configuration, this.socketOptions, this.commandFactory, this.transcoder,
+        this.mcServerList, this.stateListeners, this.connectionPoolSize, this.connectTimeout,
+        this.name, this.failureMode);
+
     this.configureClient(memcachedClient);
     return memcachedClient;
   }
@@ -373,7 +457,11 @@ public class XMemcachedClientBuilder implements MemcachedClientBuilder {
   }
 
   public Map<InetSocketAddress, AuthInfo> getAuthInfoMap() {
-    return this.authInfoMap;
+    Map<InetSocketAddress, AuthInfo> authInfoMap = new HashMap<InetSocketAddress, AuthInfo>();
+    for (MemcachedServer server : this.mcServerList) {
+      authInfoMap.put(server.getMainAddress(), server.getAuthInfo());
+    }
+    return authInfoMap;
   }
 
   /*
@@ -393,15 +481,27 @@ public class XMemcachedClientBuilder implements MemcachedClientBuilder {
    * @see net.rubyeye.xmemcached.MemcachedClientBuilder#addAuthInfo()
    */
   public void addAuthInfo(InetSocketAddress address, AuthInfo authInfo) {
-    this.authInfoMap.put(address, authInfo);
+    for (MemcachedServer server : this.mcServerList) {
+      if ((AddrUtil.getServerString(server.getMainAddress()))
+          .equals(AddrUtil.getServerString(address))) {
+        server.setAuthInfo(authInfo);
+      }
+    }
   }
 
   public void removeAuthInfo(InetSocketAddress address) {
-    this.authInfoMap.remove(address);
+    for (MemcachedServer server : this.mcServerList) {
+      if ((AddrUtil.getServerString(server.getMainAddress()))
+          .equals(AddrUtil.getServerString(address))) {
+        server.setAuthInfo(null);
+      }
+    }
   }
 
   public void setAuthInfoMap(Map<InetSocketAddress, AuthInfo> authInfoMap) {
-    this.authInfoMap = authInfoMap;
+    for (MemcachedServer server : this.mcServerList) {
+      server.setAuthInfo(authInfoMap.get(server.getMainAddress()));
+    }
   }
 
   public String getName() {
