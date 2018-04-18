@@ -9,15 +9,15 @@ import net.rubyeye.xmemcached.utils.AddrUtil;
 
 /**
  * AWSElasticCacheClient builder.
- * 
+ *
  * @author dennis
- * 
+ *
  */
 public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
   /**
    * Returns pollConfigIntervalMs.
-   * 
+   *
    * @return
    */
   public long getPollConfigIntervalMs() {
@@ -26,7 +26,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
   /**
    * Set poll config interval in milliseconds.
-   * 
+   *
    * @param pollConfigIntervalMs
    */
   public void setPollConfigIntervalMs(long pollConfigIntervalMs) {
@@ -35,7 +35,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
   /**
    * Returns initial ElasticCache server addresses.
-   * 
+   *
    * @return
    */
   public List<InetSocketAddress> getConfigAddrs() {
@@ -44,7 +44,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
   /**
    * Set initial ElasticCache server addresses.
-   * 
+   *
    * @param configAddrs
    */
   public void setConfigAddrs(List<InetSocketAddress> configAddrs) {
@@ -58,7 +58,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
   /**
    * Create a builder with an initial ElasticCache server list string in the form of "host:port
    * host2:port".
-   * 
+   *
    * @param serverList server list string in the form of "host:port host2:port"
    */
   public AWSElasticCacheClientBuilder(String serverList) {
@@ -67,7 +67,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
   /**
    * Create a builder with an initial ElasticCache server.
-   * 
+   *
    * @param addr
    */
   public AWSElasticCacheClientBuilder(InetSocketAddress addr) {
@@ -82,7 +82,7 @@ public class AWSElasticCacheClientBuilder extends XMemcachedClientBuilder {
 
   /**
    * Create a builder with initial ElasticCache server addresses.
-   * 
+   *
    * @param configAddrs
    */
   public AWSElasticCacheClientBuilder(List<InetSocketAddress> configAddrs) {
